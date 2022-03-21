@@ -1,6 +1,5 @@
 #include "heaphax.h"
 #include <Windows.h>
-#include <tlhelp32.h>
 #include <vector>
 
 using namespace std;
@@ -16,12 +15,6 @@ struct ANY
 		struct { float fVal; };
 		struct { const char* sVal; };// pointer is, of course, in remote process space
 	};
-};
-
-#define VERIFY_VALUE_COUNT	1
-struct VERIFICATION
-{
-	ANY values[VERIFY_VALUE_COUNT];
 };
 #pragma pack(pop)
 

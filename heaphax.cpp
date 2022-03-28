@@ -31,7 +31,10 @@ struct HEAPHAX
 	vector<HEAPINSTANCE> heaps;
 };
 
-// internal function;  only 32bit heap values will work for searching (eg.  int or float)
+// internal function;  only 32bit heap values will work for searching (eg.  int or float).
+//
+// this is (unfortunately) a direct copy&paste of FindBufferAddresses,  but tailored for
+// heap value types so we can skip checking the unused/uninitialized extra 8 bytes for non int/float types.
 vector<unsigned long> FindHeaps(HANDLE hSith, const ANY* pValues, int nValues)
 {
 	vector<unsigned long> addresses;
@@ -64,7 +67,7 @@ vector<unsigned long> FindHeaps(HANDLE hSith, const ANY* pValues, int nValues)
 			bufsize = mbi.RegionSize;
 		}
 
-		DWORD bytesRead = 0;
+		SIZE_T bytesRead = 0;
 		ReadProcessMemory(hSith, mbi.BaseAddress, buf, mbi.RegionSize, &bytesRead);
 
 		if (bytesRead >= nBuf)
@@ -123,7 +126,7 @@ vector<unsigned long> FindBufferAddresses(HANDLE hSith, const void* pBuf, int nB
 			bufsize = mbi.RegionSize;
 		}
 
-		DWORD bytesRead = 0;
+		SIZE_T bytesRead = 0;
 		ReadProcessMemory(hSith, mbi.BaseAddress, buf, mbi.RegionSize, &bytesRead);
 
 		if(bytesRead >= nBuf)
@@ -151,7 +154,7 @@ INITRESULT hhInit(const char* szClassName, const char* szWindowName, const int* 
 
 	*ppHH = nullptr;
 
-	HWND hWnd = FindWindow(szClassName, szWindowName);
+	HWND hWnd = FindWindowA(szClassName, szWindowName);
 	if(hWnd == 0)
 		return IR_NOSITH;
 
@@ -190,7 +193,7 @@ INITRESULT hhInit(const char* szClassName, const char* szWindowName, const int* 
 
 			if(refAddresses.size() >= 1)
 			{
-				DWORD refBytesRead = 0;
+				SIZE_T refBytesRead = 0;
 				ReadProcessMemory(hSith, (void*)(refAddresses[0]+4), &heapSize, 4, &refBytesRead);
 			}
 		}
@@ -369,7 +372,7 @@ bool hhReadString(HEAPHAX* pHH, int heapIndex, int slotIndex, char* strBuf, int 
 	for(int s=0; ; s++)
 	{
 		char c;
-		DWORD tmpRead = 0;
+		SIZE_T tmpRead = 0;
 		ReadProcessMemory(pHH->hSith, any.sVal + s, &c, 1, &tmpRead);
 									
 		if(tmpRead == 0)

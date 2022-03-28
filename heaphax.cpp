@@ -31,7 +31,71 @@ struct HEAPHAX
 	vector<HEAPINSTANCE> heaps;
 };
 
-// internal function
+// internal function;  only 32bit heap values will work for searching (eg.  int or float).
+//
+// this is (unfortunately) a direct copy&paste of FindBufferAddresses,  but tailored for
+// heap value types so we can skip checking the unused/uninitialized extra 8 bytes for non int/float types.
+vector<unsigned long> FindHeaps(HANDLE hSith, const ANY* pValues, int nValues)
+{
+	vector<unsigned long> addresses;
+
+	SYSTEM_INFO sysInfo;
+	GetSystemInfo(&sysInfo);
+
+	int nBuf = nValues * sizeof(ANY);
+
+	char* buf = nullptr;
+	int bufsize = 0;
+	for (unsigned long adr = 0; adr < (UINT_MAX - sysInfo.dwPageSize); )
+	{
+		MEMORY_BASIC_INFORMATION mbi;
+		if (VirtualQueryEx(hSith, (void*)adr, &mbi, sizeof(MEMORY_BASIC_INFORMATION)) != sizeof(MEMORY_BASIC_INFORMATION))
+			break;
+
+		if (mbi.State != MEM_COMMIT || mbi.Protect == PAGE_NOACCESS)
+		{
+			adr += sysInfo.dwPageSize;
+			continue;
+		}
+
+		if (bufsize != mbi.RegionSize)
+		{
+			if (buf != nullptr)
+				delete[] buf;
+
+			buf = new char[mbi.RegionSize];
+			bufsize = mbi.RegionSize;
+		}
+
+		SIZE_T bytesRead = 0;
+		ReadProcessMemory(hSith, mbi.BaseAddress, buf, mbi.RegionSize, &bytesRead);
+
+		if (bytesRead >= nBuf)
+			for (int offset = 0; offset < ((int)bytesRead - nBuf); offset += 4)
+			{
+				const ANY* pTest = (ANY*)(buf + offset);
+				bool match = true;
+				for (int x = 0; x < nValues; x++)
+					if (pTest[x].type != pValues[x].type || pTest[x].iVal != pValues[x].iVal/*due to union, works for floats too*/)
+					{
+						match = false;
+						break;
+					}
+				if (!match)
+					continue;
+
+				addresses.push_back((unsigned long)mbi.BaseAddress + offset);
+			}
+
+		adr += mbi.RegionSize;
+	}
+
+	if (buf != nullptr)
+		delete[] buf;
+
+	return addresses;
+}
+
 vector<unsigned long> FindBufferAddresses(HANDLE hSith, const void* pBuf, int nBuf)
 {
 	vector<unsigned long> addresses;
@@ -62,7 +126,7 @@ vector<unsigned long> FindBufferAddresses(HANDLE hSith, const void* pBuf, int nB
 			bufsize = mbi.RegionSize;
 		}
 
-		DWORD bytesRead = 0;
+		SIZE_T bytesRead = 0;
 		ReadProcessMemory(hSith, mbi.BaseAddress, buf, mbi.RegionSize, &bytesRead);
 
 		if(bytesRead >= nBuf)
@@ -90,7 +154,7 @@ INITRESULT hhInit(const char* szClassName, const char* szWindowName, const int* 
 
 	*ppHH = nullptr;
 
-	HWND hWnd = FindWindow(szClassName, szWindowName);
+	HWND hWnd = FindWindowA(szClassName, szWindowName);
 	if(hWnd == 0)
 		return IR_NOSITH;
 
@@ -116,7 +180,7 @@ INITRESULT hhInit(const char* szClassName, const char* szWindowName, const int* 
 		pVerify[x].iVal = pSignatureValues[x];
 	}
 
-	vector<unsigned long> heapSigs = FindBufferAddresses(hSith, pVerify, sizeof(ANY)*numSignatureValues);
+	vector<unsigned long> heapSigs = FindHeaps(hSith, pVerify, numSignatureValues);
 
 	for(auto i=heapSigs.begin(); i != heapSigs.end(); i++)
 	{
@@ -129,7 +193,7 @@ INITRESULT hhInit(const char* szClassName, const char* szWindowName, const int* 
 
 			if(refAddresses.size() >= 1)
 			{
-				DWORD refBytesRead = 0;
+				SIZE_T refBytesRead = 0;
 				ReadProcessMemory(hSith, (void*)(refAddresses[0]+4), &heapSize, 4, &refBytesRead);
 			}
 		}
@@ -225,7 +289,7 @@ bool ReadANY(HEAPHAX* pHH, int heapIndex, int slotIndex, ANY& any)
 	if(pHH == nullptr || heapIndex < 0 || heapIndex >= pHH->heaps.size() || slotIndex < 0 || slotIndex >= pHH->heaps[heapIndex].numSlots)
 		return false;
 
-	DWORD bytesRead = 0;
+	SIZE_T bytesRead = 0;
 	ReadProcessMemory(pHH->hSith, (void*)((unsigned long)pHH->heaps[heapIndex].pHeap + slotIndex*sizeof(ANY)), &any, sizeof(ANY), &bytesRead);
 	if(bytesRead != sizeof(ANY))
 		return false;
@@ -239,7 +303,7 @@ bool WriteANY(HEAPHAX* pHH, int heapIndex, int slotIndex, const ANY& any)
 	if(pHH == nullptr || heapIndex < 0 || heapIndex >= pHH->heaps.size() || slotIndex < 0 || slotIndex >= pHH->heaps[heapIndex].numSlots)
 		return false;
 
-	DWORD bytesWritten = 0;
+	SIZE_T bytesWritten = 0;
 	WriteProcessMemory(pHH->hSith, (void*)((unsigned long)pHH->heaps[heapIndex].pHeap + slotIndex*sizeof(ANY)), &any, sizeof(ANY), &bytesWritten);
 
 	if(bytesWritten != sizeof(ANY))
@@ -308,7 +372,7 @@ bool hhReadString(HEAPHAX* pHH, int heapIndex, int slotIndex, char* strBuf, int 
 	for(int s=0; ; s++)
 	{
 		char c;
-		DWORD tmpRead = 0;
+		SIZE_T tmpRead = 0;
 		ReadProcessMemory(pHH->hSith, any.sVal + s, &c, 1, &tmpRead);
 									
 		if(tmpRead == 0)
@@ -354,7 +418,7 @@ bool hhReadAny(HEAPHAX* pHH, int heapIndex, int slotIndex, char* strBuf)
 		for(int s=0; ; s++)
 		{
 			char c;
-			DWORD tmpRead = 0;
+			SIZE_T tmpRead = 0;
 			ReadProcessMemory(pHH->hSith, any.sVal + s, &c, 1, &tmpRead);
 									
 			if(tmpRead == 0)
@@ -421,7 +485,7 @@ bool hhWriteString(HEAPHAX* pHH, int heapIndex, int slotIndex, const char* str)
 	if(buf == nullptr)
 		return false;
 
-	DWORD bytesWritten = 0;
+	SIZE_T bytesWritten = 0;
 	WriteProcessMemory(pHH->hSith, buf, str, bufSize, &bytesWritten);
 	if(bytesWritten != bufSize)
 		return false;// leaks; oh well

@@ -34,7 +34,7 @@ void main()
 {
 	g_hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
 
-	DeleteFile("heaphax.txt");// delete previous sample file
+	DeleteFileA("heaphax.txt");// delete previous sample file
 
 	bool running = true;
 	while(running)

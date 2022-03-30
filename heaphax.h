@@ -83,11 +83,15 @@ bool hhStillGood(HEAPHAX* pHH);
 // stuff to make it easier
 INITRESULT inline hhInit_JK(const int* pSignatureValues, int numSignatureValues, HEAPHAX** ppHH)
 {
+	SCANOPTIMIZATION* pSO = nullptr;
+#if 1
 	SCANOPTIMIZATION so;
 	so.startAddress = 0x01000000U;
 	so.endAddress = 0x10000000U;
+	pSO = &so;
+#endif
 
-	return hhInit("wKernel", "Jedi Knight", pSignatureValues, numSignatureValues, ppHH, &so);
+	return hhInit("wKernel", "Jedi Knight", pSignatureValues, numSignatureValues, ppHH, pSO);
 }
 
 // to use  hhInit_JK_Default()  it is assumed you have provided this in ur COG at some point.

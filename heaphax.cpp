@@ -1,3 +1,5 @@
+// BAD ASS HACKERS 2022
+
 #include "heaphax.h"
 #include <Windows.h>
 #include <vector>

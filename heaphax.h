@@ -1,3 +1,5 @@
+// BAD ASS HACKERS 2022
+
 #ifndef _HEAPHAX_H
 #define _HEAPHAX_H
 

@@ -67,7 +67,7 @@ void main()
 			printf("(ESC to stop)   <Press any key to break continuous reading>\n");
 			while(!kbhit() && hhStillGood(pHax))
 			{
-				gotoxy(1, 2);
+				gotoxy(0, 1);
 
 
 				//  NOTE:  this is just a dumb demonstration.
@@ -85,14 +85,13 @@ void main()
 				// loop through all heaps and all slots  and dump to screen / file
 				for(int heapIndex=0; heapIndex<hhGetNumHeaps(pHax); heapIndex++)
 				{
-					printf("HEAP #%d\n"
-						   "-------------------------------\n", heapIndex);
+					printf("--------------  HEAP #%d  ---------------     \n", heapIndex);
 
 					for(int slotIndex=0; slotIndex<hhGetNumHeapSlots(pHax, heapIndex); slotIndex++)
 					{
 						char str[128];
 						hhReadAny(pHax, heapIndex, slotIndex, str);
-						printf("%d: %s\n", slotIndex, str);
+						printf("%d: %s               \n", slotIndex, str);
 
 
 						// append to sample file  (not very efficient since we re-open the file for every line.. but its just a demo)

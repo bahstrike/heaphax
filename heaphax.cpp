@@ -33,72 +33,14 @@ struct HEAPHAX
 	vector<HEAPINSTANCE> heaps;
 };
 
-// internal function;  only 32bit heap values will work for searching (eg.  int or float).
-//
-// this is (unfortunately) a direct copy&paste of FindBufferAddresses,  but tailored for
-// heap value types so we can skip checking the unused/uninitialized extra 8 bytes for non int/float types.
-vector<unsigned long> FindHeaps(HANDLE hSith, const ANY* pValues, int nValues)
+struct SKIPBYTECHECKS
 {
-	vector<unsigned long> addresses;
+	int structSize;
+	int compareBytes;
+};
 
-	SYSTEM_INFO sysInfo;
-	GetSystemInfo(&sysInfo);
-
-	int nBuf = nValues * sizeof(ANY);
-
-	char* buf = nullptr;
-	int bufsize = 0;
-	for (unsigned long adr = 0; adr < (UINT_MAX - sysInfo.dwPageSize); )
-	{
-		MEMORY_BASIC_INFORMATION mbi;
-		if (VirtualQueryEx(hSith, (void*)adr, &mbi, sizeof(MEMORY_BASIC_INFORMATION)) != sizeof(MEMORY_BASIC_INFORMATION))
-			break;
-
-		if (mbi.State != MEM_COMMIT || mbi.Protect == PAGE_NOACCESS)
-		{
-			adr += sysInfo.dwPageSize;
-			continue;
-		}
-
-		if (bufsize != mbi.RegionSize)
-		{
-			if (buf != nullptr)
-				delete[] buf;
-
-			buf = new char[mbi.RegionSize];
-			bufsize = mbi.RegionSize;
-		}
-
-		SIZE_T bytesRead = 0;
-		ReadProcessMemory(hSith, mbi.BaseAddress, buf, mbi.RegionSize, &bytesRead);
-
-		if (bytesRead >= nBuf)
-			for (int offset = 0; offset < ((int)bytesRead - nBuf); offset += 4)
-			{
-				const ANY* pTest = (ANY*)(buf + offset);
-				bool match = true;
-				for (int x = 0; x < nValues; x++)
-					if (pTest[x].type != pValues[x].type || pTest[x].iVal != pValues[x].iVal/*due to union, works for floats too*/)
-					{
-						match = false;
-						break;
-					}
-				if (!match)
-					continue;
-
-				addresses.push_back((unsigned long)mbi.BaseAddress + offset);
-			}
-
-		adr += mbi.RegionSize;
-	}
-
-	if (buf != nullptr)
-		delete[] buf;
-
-	return addresses;
-}
-
-vector<unsigned long> FindBufferAddresses(HANDLE hSith, const void* pBuf, int nBuf)
+// internal function
+vector<unsigned long> FindBufferAddresses(HANDLE hSith, const void* pBuf, int nBuf, SKIPBYTECHECKS* pSkipBytes=nullptr)
 {
 	vector<unsigned long> addresses;
 
@@ -134,8 +76,29 @@ vector<unsigned long> FindBufferAddresses(HANDLE hSith, const void* pBuf, int nB
 		if(bytesRead >= nBuf)
 			for(int offset=0; offset<((int)bytesRead-nBuf); offset += 4)
 			{
-				if(memcmp(buf+offset, pBuf, nBuf))
-					continue;
+				if(pSkipBytes == nullptr)
+				{
+					if(memcmp(buf+offset, pBuf, nBuf))
+						continue;
+				} else {
+					int numStructs = nBuf / pSkipBytes->structSize;
+					bool match=true;
+					for(int x=0; x<numStructs; x++)
+					{
+						int structOffset = x * pSkipBytes->structSize;
+						const char* pSigStruct = (const char*)pBuf + structOffset;
+						const char* pCmpStruct = (buf+offset) + structOffset;
+						
+						if(memcmp(pSigStruct, pCmpStruct, pSkipBytes->compareBytes))
+						{
+							match = false;
+							break;
+						}
+					}
+
+					if(!match)
+						continue;
+				}
 
 				addresses.push_back((unsigned long)mbi.BaseAddress + offset);
 			}
@@ -147,6 +110,16 @@ vector<unsigned long> FindBufferAddresses(HANDLE hSith, const void* pBuf, int nB
 		delete[] buf;
 
 	return addresses;
+}
+
+// internal function;  only 32bit heap values will work for searching (eg.  int or float).
+vector<unsigned long> FindHeaps(HANDLE hSith, const ANY* pValues, int nValues)
+{
+	SKIPBYTECHECKS sbc;
+	sbc.structSize = sizeof(ANY);
+	sbc.compareBytes = 4/*for type*/ + 4;//should work for int or float
+
+	return FindBufferAddresses(hSith, pValues, nValues*sizeof(ANY), &sbc);
 }
 
 INITRESULT hhInit(const char* szClassName, const char* szWindowName, const int* pSignatureValues, int numSignatureValues, HEAPHAX** ppHH)

@@ -40,16 +40,25 @@ struct SKIPBYTECHECKS
 };
 
 // internal function
-vector<unsigned long> FindBufferAddresses(HANDLE hSith, const void* pBuf, int nBuf, SKIPBYTECHECKS* pSkipBytes=nullptr)
+vector<unsigned long> FindBufferAddresses(HANDLE hSith, const void* pBuf, SIZE_T nBuf, SKIPBYTECHECKS* pSkipBytes, SCANOPTIMIZATION* pScanOptimize)
 {
 	vector<unsigned long> addresses;
 
 	SYSTEM_INFO sysInfo;
 	GetSystemInfo(&sysInfo);
 
+	unsigned long startAddress = 0;
+	unsigned long endAddress = -1;//underflow to max
+
+	if(pScanOptimize != nullptr)
+	{
+		startAddress = pScanOptimize->startAddress;
+		endAddress = pScanOptimize->endAddress;
+	}
+
 	char* buf = nullptr;
 	int bufsize = 0;
-	for(unsigned long adr=0; adr < (UINT_MAX-sysInfo.dwPageSize); )
+	for(unsigned long adr=startAddress; adr < (endAddress-sysInfo.dwPageSize); )
 	{
 		MEMORY_BASIC_INFORMATION mbi;
 		if(VirtualQueryEx(hSith, (void*)adr, &mbi, sizeof(MEMORY_BASIC_INFORMATION)) != sizeof(MEMORY_BASIC_INFORMATION))
@@ -74,7 +83,7 @@ vector<unsigned long> FindBufferAddresses(HANDLE hSith, const void* pBuf, int nB
 		ReadProcessMemory(hSith, mbi.BaseAddress, buf, mbi.RegionSize, &bytesRead);
 
 		if(bytesRead >= nBuf)
-			for(int offset=0; offset<((int)bytesRead-nBuf); offset += 4)
+			for(int offset=0; offset<((int)bytesRead-(int)nBuf); offset += 4)
 			{
 				if(pSkipBytes == nullptr)
 				{
@@ -113,16 +122,16 @@ vector<unsigned long> FindBufferAddresses(HANDLE hSith, const void* pBuf, int nB
 }
 
 // internal function;  only 32bit heap values will work for searching (eg.  int or float).
-vector<unsigned long> FindHeaps(HANDLE hSith, const ANY* pValues, int nValues)
+vector<unsigned long> FindHeaps(HANDLE hSith, const ANY* pValues, int nValues, SCANOPTIMIZATION* pScanOptimize)
 {
 	SKIPBYTECHECKS sbc;
 	sbc.structSize = sizeof(ANY);
 	sbc.compareBytes = 4/*for type*/ + 4;//should work for int or float
 
-	return FindBufferAddresses(hSith, pValues, nValues*sizeof(ANY), &sbc);
+	return FindBufferAddresses(hSith, pValues, nValues*sizeof(ANY), &sbc, pScanOptimize);
 }
 
-INITRESULT hhInit(const char* szClassName, const char* szWindowName, const int* pSignatureValues, int numSignatureValues, HEAPHAX** ppHH)
+INITRESULT hhInit(const char* szClassName, const char* szWindowName, const int* pSignatureValues, int numSignatureValues, HEAPHAX** ppHH, SCANOPTIMIZATION* pScanOptimize)
 {
 	if(ppHH == nullptr)
 		return IR_BADPARAM;
@@ -155,7 +164,7 @@ INITRESULT hhInit(const char* szClassName, const char* szWindowName, const int* 
 		pVerify[x].iVal = pSignatureValues[x];
 	}
 
-	vector<unsigned long> heapSigs = FindHeaps(hSith, pVerify, numSignatureValues);
+	vector<unsigned long> heapSigs = FindHeaps(hSith, pVerify, numSignatureValues, pScanOptimize);
 
 	for(auto i=heapSigs.begin(); i != heapSigs.end(); i++)
 	{
@@ -164,7 +173,7 @@ INITRESULT hhInit(const char* szClassName, const char* szWindowName, const int* 
 		// now lets search again for what points here, so we can find out how big heap is
 		int heapSize = 0;
 		{
-			vector<unsigned long> refAddresses = FindBufferAddresses(hSith, &heapAddress, 4);
+			vector<unsigned long> refAddresses = FindBufferAddresses(hSith, &heapAddress, 4, nullptr, pScanOptimize);
 
 			if(refAddresses.size() >= 1)
 			{
@@ -251,7 +260,7 @@ int hhGetNumHeapSlots(HEAPHAX* pHH, int heapIndex)
 	if(pHH == nullptr)
 		return 0;
 
-	if(heapIndex < 0 || heapIndex >= pHH->heaps.size())
+	if(heapIndex < 0 || heapIndex >= (int)pHH->heaps.size())
 		return 0;
 
 	return pHH->heaps[heapIndex].numSlots;
@@ -261,7 +270,7 @@ int hhGetNumHeapSlots(HEAPHAX* pHH, int heapIndex)
 // internal function
 bool ReadANY(HEAPHAX* pHH, int heapIndex, int slotIndex, ANY& any)
 {
-	if(pHH == nullptr || heapIndex < 0 || heapIndex >= pHH->heaps.size() || slotIndex < 0 || slotIndex >= pHH->heaps[heapIndex].numSlots)
+	if(pHH == nullptr || heapIndex < 0 || heapIndex >= (int)pHH->heaps.size() || slotIndex < 0 || slotIndex >= pHH->heaps[heapIndex].numSlots)
 		return false;
 
 	SIZE_T bytesRead = 0;
@@ -275,7 +284,7 @@ bool ReadANY(HEAPHAX* pHH, int heapIndex, int slotIndex, ANY& any)
 // internal function
 bool WriteANY(HEAPHAX* pHH, int heapIndex, int slotIndex, const ANY& any)
 {
-	if(pHH == nullptr || heapIndex < 0 || heapIndex >= pHH->heaps.size() || slotIndex < 0 || slotIndex >= pHH->heaps[heapIndex].numSlots)
+	if(pHH == nullptr || heapIndex < 0 || heapIndex >= (int)pHH->heaps.size() || slotIndex < 0 || slotIndex >= pHH->heaps[heapIndex].numSlots)
 		return false;
 
 	SIZE_T bytesWritten = 0;

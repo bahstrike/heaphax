@@ -64,10 +64,16 @@ enum HEAPSLOTTYPE
 	HST_VECTOR=5,
 };
 
+struct SCANOPTIMIZATION
+{
+	unsigned long startAddress;
+	unsigned long endAddress;
+};
 
-// overall control;  use these to scan for heaps when ur actually in-game..then keep the HEAPHAX handle for functions below
+
+// overall control;  use these to scan for heaps when ur actrually in-game..then keep the HEAPHAX handle for functions below
 // u should probably shutdown and re-init  between level changes.
-INITRESULT hhInit(const char* szClassName, const char* szWindowName, const int* pSignatureValues, int numSignatureValues, HEAPHAX** ppHH);
+INITRESULT hhInit(const char* szClassName, const char* szWindowName, const int* pSignatureValues, int numSignatureValues, HEAPHAX** ppHH, SCANOPTIMIZATION* pScanOptimize=nullptr);
 void hhShutdown(HEAPHAX* pHH);
 bool hhStillGood(HEAPHAX* pHH);
 
@@ -77,7 +83,11 @@ bool hhStillGood(HEAPHAX* pHH);
 // stuff to make it easier
 INITRESULT inline hhInit_JK(const int* pSignatureValues, int numSignatureValues, HEAPHAX** ppHH)
 {
-	return hhInit("wKernel", "Jedi Knight", pSignatureValues, numSignatureValues, ppHH);
+	SCANOPTIMIZATION so;
+	so.startAddress = 0x01000000U;
+	so.endAddress = 0x10000000U;
+
+	return hhInit("wKernel", "Jedi Knight", pSignatureValues, numSignatureValues, ppHH, &so);
 }
 
 // to use  hhInit_JK_Default()  it is assumed you have provided this in ur COG at some point.

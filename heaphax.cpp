@@ -312,32 +312,46 @@ bool WriteANY(HEAPHAX* pHH, int heapIndex, int slotIndex, const ANY& any)
 	return true;
 }
 
-bool hhReadInt(HEAPHAX* pHH, int heapIndex, int slotIndex, int& value)
+bool hhReadInt(HEAPHAX* pHH, int heapIndex, int slotIndex, int& value, bool strict)
 {
 	ANY any;
 	if(!ReadANY(pHH, heapIndex, slotIndex, any))
 		return false;
 
-	if(any.type != HST_INT)
-		return false;
+	if(any.type == HST_INT)
+	{
+		value = any.iVal;
+		return true;
+	}
 
-	value = any.iVal;
+	if(!strict && any.type == HST_FLOAT)
+	{
+		value = (int)any.fVal;
+		return true;
+	}
 
-	return true;
+	return false;
 }
 
-bool hhReadFloat(HEAPHAX* pHH, int heapIndex, int slotIndex, float& value)
+bool hhReadFloat(HEAPHAX* pHH, int heapIndex, int slotIndex, float& value, bool strict)
 {
 	ANY any;
 	if(!ReadANY(pHH, heapIndex, slotIndex, any))
 		return false;
 
-	if(any.type != HST_FLOAT)
-		return false;
+	if(any.type == HST_FLOAT)
+	{
+		value = any.fVal;
+		return true;
+	}
 
-	value = any.fVal;
+	if(!strict && any.type == HST_INT)
+	{
+		value = (float)any.iVal;
+		return true;
+	}
 
-	return true;
+	return false;
 }
 
 bool hhReadVector(HEAPHAX* pHH, int heapIndex, int slotIndex, float& x, float& y, float& z)

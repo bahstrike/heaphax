@@ -110,8 +110,8 @@ int hhGetNumHeaps(HEAPHAX* pHH);
 int hhGetNumHeapSlots(HEAPHAX* pHH, int heapIndex);
 HEAPSLOTTYPE hhGetHeapSlotType(HEAPHAX* pHH, int heapIndex, int slotIndex);
 
-bool hhReadInt(HEAPHAX* pHH, int heapIndex, int slotIndex, int& value);
-bool hhReadFloat(HEAPHAX* pHH, int heapIndex, int slotIndex, float& value);
+bool hhReadInt(HEAPHAX* pHH, int heapIndex, int slotIndex, int& value, bool strict=false);// if strict is false, then this still works if float
+bool hhReadFloat(HEAPHAX* pHH, int heapIndex, int slotIndex, float& value, bool strict=false);// if strict is false, then this still works if int
 bool hhReadVector(HEAPHAX* pHH, int heapIndex, int slotIndex, float& x, float& y, float& z);
 bool hhReadString(HEAPHAX* pHH, int heapIndex, int slotIndex, char* strBuf, int maxStrBufBytes);
 
